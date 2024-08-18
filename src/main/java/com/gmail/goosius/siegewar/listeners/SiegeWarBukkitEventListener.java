@@ -7,6 +7,7 @@ import com.gmail.goosius.siegewar.utils.DataCleanupUtil;
 import com.gmail.goosius.siegewar.utils.SiegeWarNotificationUtil;
 import com.gmail.goosius.siegewar.utils.SiegeWarSpawnUtil;
 import com.gmail.goosius.siegewar.utils.SiegeWarWarningsUtil;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -22,12 +23,8 @@ import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
-import org.bukkit.event.player.PlayerItemConsumeEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.potion.PotionEffectType;
 
 import com.gmail.goosius.siegewar.Messaging;
@@ -44,12 +41,12 @@ import com.palmergames.bukkit.towny.object.Town;
 import com.palmergames.bukkit.towny.object.Translatable;
 
 /**
- * 
+ *
  * @author LlmDl
  *
  */
 public class SiegeWarBukkitEventListener implements Listener {
-	
+
 	public SiegeWarBukkitEventListener() {}
 
 	/*
@@ -76,7 +73,7 @@ public class SiegeWarBukkitEventListener implements Listener {
 			}
 		}
 	}
-	
+
 	/*
 	 * Duplicates what exists in the TownyBlockListener but on a higher priority.
 	 */
@@ -87,7 +84,7 @@ public class SiegeWarBukkitEventListener implements Listener {
 			event.setCancelled(true);
 
 		List<Block> blocks = event.getBlocks();
-		
+
 		if (!blocks.isEmpty()) {
 			//check each block to see if it's going to pass a plot boundary
 			for (Block block : blocks) {
@@ -105,7 +102,7 @@ public class SiegeWarBukkitEventListener implements Listener {
 
 		if (testBlockMove(event.getBlock(), event.getDirection()))
 			event.setCancelled(true);
-		
+
 		List<Block> blocks = event.getBlocks();
 
 		if (!blocks.isEmpty()) {
@@ -119,11 +116,11 @@ public class SiegeWarBukkitEventListener implements Listener {
 
 	/**
 	 * Decides whether blocks moved by pistons follow the rules.
-	 * 
+	 *
 	 * @param block - block that is being moved.
 	 * @param direction - direction the piston is facing.
-	 * 
-	 * @return true if block is able to be moved according to siege war rules. 
+	 *
+	 * @return true if block is able to be moved according to siege war rules.
 	 */
 	private boolean testBlockMove(Block block, BlockFace direction) {
 
@@ -148,7 +145,7 @@ public class SiegeWarBukkitEventListener implements Listener {
 			PlayerDeath.evaluateSiegePlayerDeath(event.getEntity(), event);
 		}
 	}
-	
+
 	@EventHandler(ignoreCancelled = true)
 	public void onPlayerTeleport(PlayerTeleportEvent event) {
 		// Check if SiegeWar is set to disallow non-residents teleporting into a siege
@@ -159,17 +156,17 @@ public class SiegeWarBukkitEventListener implements Listener {
 		// Don't stop admins/ops. towny.admin.spawn is part of towny.admin.
 		if (event.getPlayer().hasPermission("towny.admin.spawn") || event.getPlayer().isOp())
 			return;
-		
+
 		// Let's ignore Citizens NPCs
 		if (PluginIntegrations.getInstance().isNPC(event.getPlayer()))
 			return;
-		
+
 		// Don't stop a player if they have a teleport pass
 		if(SiegeWarSpawnUtil.doesPlayerHasTeleportPass(event.getPlayer())) {
 			SiegeWarSpawnUtil.removePlayerTeleportPass(event.getPlayer());
 			return;
 		}
-		
+
 		// The teleport destination is in the wilderness.
 		if (TownyAPI.getInstance().isWilderness(event.getTo())) {
 			// A part of an active siege zone in the wilderness, we stop it.
@@ -215,7 +212,7 @@ public class SiegeWarBukkitEventListener implements Listener {
 			if(activeSiegeAtPlayerLocation != null) {
 				//Register in active siege zone, for PVP calculations etc.
 				SiegeWarDistanceUtil.registerPlayerToActiveSiegeZone(event.getPlayer(), activeSiegeAtPlayerLocation);
-				/* 
+				/*
 				 * Send active siege warning.
 				 * Note: The player object will be new, even if the player logged in recently.
 				 * Thus, this line will always trigger a warning message.
@@ -236,7 +233,7 @@ public class SiegeWarBukkitEventListener implements Listener {
 			return;
 
 		//Remove banner-control related glowing
-		if(SiegeController.getPlayersInBannerControlSessions().contains(event.getPlayer()) 
+		if(SiegeController.getPlayersInBannerControlSessions().contains(event.getPlayer())
 		  && event.getPlayer().hasPotionEffect(PotionEffectType.GLOWING)) {
 			SiegeWar.getSiegeWar().getScheduler().runLater(() -> event.getPlayer().removePotionEffect(PotionEffectType.GLOWING), 1l);
 		}
@@ -253,13 +250,13 @@ public class SiegeWarBukkitEventListener implements Listener {
 			event.setCancelled(true);
 		}
 	}
-	
+
 	/**
 	 * - Stop in-siegezone pvp events from being cancelled (e.g. by other plugins)
 	 * - Stop TNT/Minecarts from injuring players in the siegezone wilderness
 	 */
 	@EventHandler(priority = EventPriority.HIGHEST)
-	public void on(EntityDamageByEntityEvent event) {	
+	public void on(EntityDamageByEntityEvent event) {
 		if(!isSWEnabledAndIsThisAWarAllowedWorld(event.getEntity().getWorld()))
 			return;
 
@@ -316,10 +313,10 @@ public class SiegeWarBukkitEventListener implements Listener {
 	/**
 	 * If toxicity reduction is enabled, the following effect applies:
 	 * - No /tell if a battle session is active (and for 10 mins after)
-	 * 
+	 *
 	 * This method will pick up any command where the first arg is "/<anything>tell"
-	 * 
-	 * @param event the player command preprocess event 
+	 *
+	 * @param event the player command preprocess event
 	 */
 	@EventHandler (ignoreCancelled = true)
 	public void onCommand(PlayerCommandPreprocessEvent event){
@@ -331,5 +328,22 @@ public class SiegeWarBukkitEventListener implements Listener {
 				SiegeWarNotificationUtil.notifyPlayerOfBattleSessionChatRestriction(event.getPlayer(), "tell");
 			}
 		}
+	}
+
+	/**
+	 * @param event
+	 */
+	@EventHandler
+	public void onMove(PlayerMoveEvent event) {
+		Player player = event.getPlayer();
+		Location from = event.getFrom();
+		Location to = event.getTo();
+		if (hasExplicitlyChangedPosition(from, to) && isSWEnabledAndIsThisAWarAllowedWorld(player.getLocation().getWorld())) {
+			if (SiegeWarDistanceUtil.isPlayerRegisteredToActiveSiegeZone() && SiegeWarDistanceUtil.isLo)
+		}
+	}
+
+	private boolean hasExplicitlyChangedPosition(Location from, Location to) {
+		return from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ() || !from.getWorld().equals(to.getWorld());
 	}
 }
